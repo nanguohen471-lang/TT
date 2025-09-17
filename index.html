@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
+<title>ULTRA TETRIS – Neo</title>
+<link rel="manifest" href="manifest.json"/>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+.side{display:flex;flex-direction:column;gap:10px;position:absolute;left:calc(100% + 12px);top:0}
+</style>
+</head>
+<body>
+<div class="header">
+  <select id="modeSelect">
+    <option value="single">單機挑戰</option>
+    <option value="vs_ai">AI 對戰 (計時+KO)</option>
+  </select>
+  <select id="aiLevel">
+    <option value="easy">簡單</option>
+    <option value="normal" selected>普通</option>
+    <option value="hard">困難</option>
+  </select>
+  <button id="startBtn">開始</button>
+</div>
+<audio id="bgm" src="bgm.mp3" loop></audio>
+<script>
+let muted=false; function playBgm(){ if(muted) return; const a=document.getElementById('bgm'); a.volume=0; a.play().catch(()=>{}); let v=0; const fade=setInterval(()=>{v+=0.02;if(v>=0.4){v=0.4;clearInterval(fade);} a.volume=v;},100); }
+document.getElementById("startBtn").addEventListener("click",()=>{playBgm();});
+</script>
+</body>
+</html>
