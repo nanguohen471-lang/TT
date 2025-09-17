@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
+<title>ULTRA TETRIS – Neo</title>
+<link rel="manifest" href="manifest.json"/>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+:root{--neon:#00e6df}
+*{box-sizing:border-box;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
+html,body{height:100%;margin:0;font-family:"Noto Sans TC",system-ui,-apple-system,sans-serif;color:#e7fbff;background:#02030a}
+.bg{position:fixed;inset:0;pointer-events:none;background:
+ radial-gradient(1200px 1200px at 15% 15%, rgba(0,255,255,0.12), transparent 60%),
+ radial-gradient(1000px 1000px at 80% 80%, rgba(255,0,255,0.10), transparent 60%);}
+.container{position:relative;display:flex;flex-direction:column;align-items:center;height:100vh}
+.header{display:flex;justify-content:center;gap:8px;margin:0;padding:6px 0 0;width:100%}
+.btn,select.btn{background:#000;border:1px solid var(--neon);color:var(--neon);padding:8px 12px;border-radius:10px;font-weight:800;cursor:pointer;font-size:14px}
+.main{flex:1;display:flex;flex-direction:column;align-items:center}
+.boardWrap{position:relative;display:flex;align-items:flex-start}
+.board{width:min(65vw,480px);aspect-ratio:1/2;background:#000;border:2px solid var(--neon);border-radius:6px;position:relative;margin-right:min(6vw,40px)}
+.canvas{width:100%;height:100%;image-rendering:pixelated}
+.side{display:flex;flex-direction:column;gap:8px;position:absolute;right:calc(min(-22vw,-150px));top:0}
+.panel{width:20vw;max-width:110px;height:20vw;max-height:110px;background:#071018;border:1px solid rgba(0,255,255,0.25);border-radius:10px;color:#c8f8ff;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.panel h4{margin:6px 0 4px 0;font-size:12px;letter-spacing:1px}
+.mini{width:80%;height:80%;background:#0b0b12;border:1px solid rgba(0,255,255,0.2)}
+.controls-virtual{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:min(75vw,520px);margin:8px 0 12px}
+.vbtn{padding:20px;font-size:18px;border-radius:14px;background:#0a0f16;border:1px solid rgba(0,255,255,0.25);color:var(--neon);font-weight:800}
+.vbtn:active{transform:scale(0.96);box-shadow:0 0 10px #0ff}
+.badge{position:absolute;top:-28px;left:0;color:#9ff;text-shadow:0 0 6px #0ff}
+.koHud{position:absolute;top:-28px;right:0;font-weight:900;color:#ff8aa8;text-shadow:0 0 6px #f0a}
+.tghost{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:200px;height:200px;border-radius:50%;pointer-events:none;opacity:0;}
+@keyframes tspinBurst{
+  0%{transform:translate(-50%,-50%) scale(0.3);opacity:1;filter:blur(10px);background:radial-gradient(circle,rgba(0,255,255,0.6),transparent 70%);}
+  50%{transform:translate(-50%,-50%) scale(1.5);opacity:0.85;filter:blur(2px);background:radial-gradient(circle,rgba(255,0,255,0.6),transparent 70%);}
+  100%{transform:translate(-50%,-50%) scale(2.6);opacity:0;filter:blur(22px);background:radial-gradient(circle,rgba(0,255,255,0.6),transparent 70%);}
+}
+.showTspin{animation:tspinBurst 0.85s ease-out forwards;}
+
+/* Wave 音波特效（四消/T-Spin 消行） */
+.waveFx{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;opacity:0}
+.waveFx::before,.waveFx::after{content:"";position:absolute;inset:20% 10%;border:2px solid rgba(0,255,255,0.35);border-radius:16px;opacity:0;transform:scale(0.8);}
+.waveFx::after{border-color:rgba(255,0,255,0.28);inset:25% 15%}
+@keyframes wavePulse{0%{opacity:1;transform:scale(0.8)}70%{opacity:0.4}100%{opacity:0;transform:scale(1.4)}}
+.showWave::before{animation:wavePulse .6s ease-out forwards}
+.showWave::after{animation:wavePulse .8s ease-out forwards}
+
+/* 開場動畫 Overlay */
+.startup{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#02030a;z-index:20}
+.startup .panel{position:relative;width:min(70vw,520px);height:min(60vh,680px);background:rgba(0,0,0,0.4);border:1px solid rgba(0,255,255,0.25);border-radius:16px;box-shadow:0 0 30px rgba(0,255,255,0.15) inset;}
+.startup .frame{position:absolute;inset:8% 12%;border:1.5px solid #00e6ff;border-radius:10px}
+.startup .scan{position:absolute;left:12%;right:12%;height:2px;background:#00e6ff;opacity:.7;animation:scan 1.4s linear infinite}
+@keyframes scan{0%{top:12%}100%{top:88%}}
+.startup .glow{position:absolute;inset:-15%;background:
+ radial-gradient(600px 600px at 20% 30%, rgba(0,255,255,.15), transparent 60%),
+ radial-gradient(600px 600px at 80% 70%, rgba(255,0,255,.12), transparent 60%);filter:blur(10px);}
+.startup .txt{position:absolute;left:0;right:0;bottom:8%;text-align:center;color:#9fe;font-weight:800;letter-spacing:1.5px}
+.startup.fade{animation:fadeout .5s ease forwards}
+@keyframes fadeout{to{opacity:0;visibility:hidden}}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+
+<!-- iOS 防縮放 -->
+<script>
+document.addEventListener('gesturestart', e => e.preventDefault(), {passive:false});
+document.addEventListener('dblclick', e => e.preventDefault(), {passive:false});
+</script>
+
+<!-- 音訊 -->
+<audio id="bgm" src="bgm.mp3" preload="auto" playsinline loop></audio>
+<audio id="sfxRotate" src="rotate.mp3" preload="auto" playsinline></audio>
+<audio id="sfxClear" src="clear.mp3" preload="auto" playsinline></audio>
+<audio id="sfxTspin" src="tspin.mp3" preload="auto" playsinline></audio>
+<audio id="sfxGameover" src="gameover.mp3" preload="auto" playsinline></audio>
+
+<!-- 開場動畫 -->
+<div id="startup" class="startup">
+  <div class="panel">
+    <div class="glow"></div>
+    <div class="frame"></div>
+    <div class="scan"></div>
+    <div class="txt">SYSTEM INITIALIZING...</div>
+  </div>
+</div>
+
+<div class="container" style="opacity:0; transition:opacity .5s ease;">
+  <div class="header">
+    <select id="modeSelect" class="btn">
+      <option value="single">單機挑戰</option>
+      <option value="vs_ai">AI 對戰 (KO)</option>
+    </select>
+    <button id="startBtn" class="btn">開始</button>
+    <button id="restartBtn" class="btn">重新開始</button>
+    <button id="muteBtn" class="btn">🔊 音效</button>
+    <button id="installBtn" class="btn" style="display:none;">📲 安裝 App</button>
+  </div>
+
+  <div class="main">
+    <div class="boardWrap">
+      <div class="board">
+        <div class="badge" id="statusText">Ready</div>
+        <div class="koHud" id="koText">KO 0 / 5</div>
+        <canvas id="board" class="canvas" width="300" height="600"></canvas>
+        <div class="waveFx" id="wave"></div>
+        <div class="tghost" id="tghost"></div>
+        <div class="side">
+          <div class="panel"><h4>HOLD</h4><canvas id="holdMini" class="mini" width="80" height="80"></canvas></div>
+          <div class="panel"><h4>NEXT</h4><canvas id="nextMini" class="mini" width="80" height="80"></canvas></div>
+          <div class="panel"><h4>計時</h4><div id="timer">0s</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="controls-virtual">
+      <button class="vbtn" id="btnLeft">←</button>
+      <button class="vbtn" id="btnDown">↓</button>
+      <button class="vbtn" id="btnRight">→</button>
+      <button class="vbtn" id="btnRotate">旋轉</button>
+      <button class="vbtn" id="btnHold">HOLD</button>
+      <button class="vbtn" id="btnHard">快降</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/*** Service worker for GH pages ***/
+if('serviceWorker' in navigator){
+  addEventListener('load',()=>{
+    const path=(location.pathname.endsWith('/')?location.pathname:location.pathname.replace(/\/[^/]*$/,'/'))+'sw.js';
+    navigator.serviceWorker.register(path);
+  });
+}
+
+/*** 安裝 PWA ***/
+let deferredPrompt=null; const installBtn=document.getElementById("installBtn"); installBtn.style.display="none";
+addEventListener("beforeinstallprompt",(e)=>{e.preventDefault(); deferredPrompt=e; installBtn.style.display="inline-block";});
+installBtn.addEventListener("click",()=>{ if(deferredPrompt){ deferredPrompt.prompt(); deferredPrompt.userChoice.finally(()=>{deferredPrompt=null; installBtn.style.display="none";});}});
+
+/*** 音訊 ***/
+const bgm=document.getElementById('bgm');
+function safePlay(a){a&&a.play&&a.play().catch(()=>{});}
+let muted=false;
+document.getElementById("muteBtn").addEventListener("click",()=>{
+  muted=!muted; document.getElementById("muteBtn").textContent= muted? "🔇 靜音":"🔊 音效";
+  document.querySelectorAll("audio").forEach(a=>a.muted=muted);
+});
+function sfx(id){ if(muted) return; const el=document.getElementById(id); if(el){ el.currentTime=0; safePlay(el); } }
+document.body.addEventListener("touchstart",()=>safePlay(bgm),{once:true,passive:true});
+
+/*** 開場動畫邏輯 ***/
+const startup = document.getElementById('startup');
+const app = document.querySelector('.container');
+window.addEventListener('load', ()=>{ setTimeout(()=>{ document.getElementById('startup').classList.add('fade'); document.querySelector('.container').style.opacity=1; }, 1500); });
+
+/*** 常數與畫布 ***/
+const W=10,H=20,BS=30;
+const canvas=document.getElementById('board'), ctx=canvas.getContext('2d',{alpha:false, desynchronized:true});
+ctx.imageSmoothingEnabled=false;
+const holdMini=document.getElementById('holdMini').getContext('2d');
+const nextMini=document.getElementById('nextMini').getContext('2d');
+const statusText=document.getElementById('statusText');
+const koText=document.getElementById('koText');
+const timerEl=document.getElementById('timer');
+const waveEl=document.getElementById('wave');
+
+/*** 預渲染方塊與格線 ***/
+const COLORS={I:["#00e6ff","#00aaff"],O:["#ffd700","#ff9900"],T:["#ff00ff","#b000ff"],L:["#ff8800","#ff4400"],J:["#3385ff","#0033cc"],S:["#00ff88","#00ffaa"],Z:["#ff3355","#ff6699"]};
+const sprite = {};
+function makeBlockSprite(type){
+  const off=document.createElement('canvas'); off.width=BS; off.height=BS; const c=off.getContext('2d');
+  const g=c.createLinearGradient(0,0,BS,BS); const col=COLORS[type]||["#fff","#888"]; g.addColorStop(0,col[0]); g.addColorStop(1,col[1]);
+  c.fillStyle=g; c.fillRect(0,0,BS,BS); c.strokeStyle="rgba(0,255,255,0.9)"; c.lineWidth=1.5; c.strokeRect(0.5,0.5,BS-1,BS-1);
+  return off;
+}
+for(const t of Object.keys(COLORS)) sprite[t]=makeBlockSprite(t);
+const gridCanvas = (()=>{ const off=document.createElement('canvas'); off.width=canvas.width; off.height=canvas.height; const g=off.getContext('2d');
+  g.fillStyle="#000"; g.fillRect(0,0,off.width,off.height);
+  g.strokeStyle="rgba(0,255,255,0.08)"; g.lineWidth=1;
+  for(let x=0;x<=W;x++){ g.beginPath(); g.moveTo(x*BS,0); g.lineTo(x*BS,H*BS); g.stroke(); }
+  for(let y=0;y<=H;y++){ g.beginPath(); g.moveTo(0,y*BS); g.lineTo(W*BS,y*BS); g.stroke(); }
+  return off; })();
+
+/*** 形狀 ***/
+const SHAPES={
+  I:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
+  O:[[1,1],[1,1]],
+  T:[[0,1,0],[1,1,1],[0,0,0]],
+  L:[[0,0,1],[1,1,1],[0,0,0]],
+  J:[[1,0,0],[1,1,1],[0,0,0]],
+  S:[[0,1,1],[1,1,0],[0,0,0]],
+  Z:[[1,1,0],[0,1,1],[0,0,0]],
+};
+
+let mode='single', arena, piece, pos, queue, bag, hold=null, canHold=true, gameOver=false;
+let dropInterval=800, timeMs=0, lastTime=0, acc=0, startTs=0, aiTimer=0;
+let koMe=0, koAI=0, combo=-1, lastRotate=false;
+let ai;
+
+/*** 工具 ***/
+const mat=(w,h)=>{const m=[];while(h--)m.push(new Array(w).fill(0));return m}
+const clone=m=>m.map(r=>r.slice());
+function rotM(m,dir){const N=m.length,res=mat(N,N);for(let y=0;y<N;y++)for(let x=0;x<N;x++){res[dir>0?x:N-1-x][dir>0?N-1-y:y]=m[y][x];}return res}
+function collide(A,M,off){for(let y=0;y<M.length;y++)for(let x=0;x<M[y].length;x++){ if(M[y][x] && ((A[y+off.y]&&A[y+off.y][x+off.x])!==0)) return true; } return false}
+function merge(A,M,off,type){for(let y=0;y<M.length;y++)for(let x=0;x<M[y].length;x++){ if(M[y][x]) A[y+off.y][x+off.x]=type; }}
+function clearLines(A){let n=0;outer:for(let y=H-1;y>=0;y--){for(let x=0;x<W;x++) if(!A[y][x]) continue outer; A.splice(y,1); A.unshift(new Array(W).fill(0)); y++; n++;} return n}
+
+/*** 7-bag ***/
+function refillBag(){bag = Object.keys(SHAPES).sort(()=>Math.random()-0.5);}
+function nextType(){if(bag.length===0) refillBag(); return bag.pop();}
+function ensureQueue(){while(queue.length<5) queue.push(nextType());}
+function drawMini(ctx2d,t){ ctx2d.clearRect(0,0,80,80); const m=SHAPES[t]; if(!m) return; const cell=18, ox=10, oy=10; for(let y=0;y<m.length;y++)for(let x=0;x<m[y].length;x++){ if(m[y][x]){ ctx2d.drawImage(sprite[t]||sprite['I'], ox+x*cell, oy+y*cell, cell-2, cell-2); } } }
+
+function spawn(){ const t = (queue.length?queue.shift():nextType()); piece={type:t, mat:clone(SHAPES[t])}; pos={x:3,y:0}; canHold=true; ensureQueue(); drawMini(nextMini, queue[0]); if(collide(arena,piece.mat,pos)){ roundKO('ai'); } }
+
+/*** 繪製 ***/
+function drawArena(){ for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const v=arena[y][x]; if(v) ctx.drawImage(sprite[v]||sprite['I'], x*BS, y*BS); } }
+function ghostY(){ let gy=pos.y; while(!collide(arena, piece.mat, {x:pos.x,y:gy+1})) gy++; return gy; }
+function draw(){
+  ctx.drawImage(gridCanvas,0,0);
+  drawArena();
+  const gy=ghostY();
+  for(let y=0;y<piece.mat.length;y++)for(let x=0;x<piece.mat[y].length;x++){
+    if(piece.mat[y][x]){ ctx.globalAlpha=0.28; ctx.drawImage(sprite[piece.type], (x+pos.x)*BS, (y+gy)*BS); ctx.globalAlpha=1; }
+  }
+  for(let y=0;y<piece.mat.length;y++)for(let x=0;x<piece.mat[y].length;x++){
+    if(piece.mat[y][x]) ctx.drawImage(sprite[piece.type], (x+pos.x)*BS, (y+pos.y)*BS);
+  }
+}
+
+/*** 操作 ***/
+function move(dx){ if(!collide(arena,piece.mat,{x:pos.x+dx,y:pos.y})) pos.x+=dx; }
+function softDrop(){ pos.y++; if(collide(arena,piece.mat,pos)){ pos.y--; lock(); } lastRotate=false; }
+function hardDrop(){ while(!collide(arena,piece.mat,{x:pos.x,y:pos.y+1})) pos.y++; lock(); }
+function rotate(dir){ const m=rotM(piece.mat,dir); const kicks=[0,1,-1,2,-2]; for(const k of kicks){ if(!collide(arena,m,{x:pos.x+k,y:pos.y})){ piece.mat=m; pos.x+=k; sfx('sfxRotate'); lastRotate=true; return; } } }
+
+/*** 判定與攻擊 ***/
+function isTspin(){ if(piece.type!=='T'||!lastRotate) return false; const cx=pos.x+1, cy=pos.y+1; const cs=[[cx-1,cy-1],[cx+1,cy-1],[cx-1,cy+1],[cx+1,cy+1]]; let f=0; for(const [x,y] of cs){ if(y<0||y>=H||x<0||x>=W || arena[y][x]) f++; } return f>=3; }
+function attackBy(lines,tspin){ let send=0;
+  if(tspin){ send = lines===1?2: lines===2?4:6; }
+  else{ if(lines===2) send=1; else if(lines===3) send=2; else if(lines>=4) send=4; }
+  if(lines>0){ combo++; if(combo>=1) send += Math.min(4, combo); } else combo=-1;
+  return send;
+}
+function wave(){ waveEl.classList.remove('showWave'); void waveEl.offsetWidth; waveEl.classList.add('showWave'); }
+function lock(){
+  merge(arena,piece.mat,pos,piece.type);
+  const tsp=isTspin(); if(tsp){ document.getElementById('tghost').classList.add('showTspin'); sfx('sfxTspin'); setTimeout(()=>document.getElementById('tghost').classList.remove('showTspin'),700); }
+  const lines=clearLines(arena); if(lines>0){ sfx('sfxClear'); if(lines>=4||tsp) wave(); }
+  if(mode==='vs_ai'){ const send=attackBy(lines,tsp); if(send>0) ai.receive(send); }
+  spawn();
+}
+
+/*** 垃圾線 ***/
+function addGarbage(A,n){ for(let i=0;i<n;i++){ A.shift(); const row=new Array(W).fill('G'); row[Math.floor(Math.random()*W)]=0; A.push(row);}}
+
+/*** AI（隱藏） ***/
+function makeAI(){
+  const A=mat(W,H); let q=[], b=[];
+  function ref(){b=Object.keys(SHAPES).sort(()=>Math.random()-0.5);}
+  function nt(){ if(b.length===0) ref(); return b.pop(); }
+  function ensure(){ while(q.length<5) q.push(nt()); }
+  function cloneArena(a){return a.map(r=>r.slice());}
+  function can(a,m,px,py){ for(let y=0;y<m.length;y++)for(let x=0;x<m[y].length;x++){ if(m[y][x] && ((a[py+y]&&a[py+y][px+x])!==0)) return false; } return true; }
+  function dropY(a,m,px){ let py=0; while(can(a,m,px,py+1)) py++; return py; }
+  function place(a,m,px,py,t){ for(let y=0;y<m.length;y++)for(let x=0;x<m[y].length;x++){ if(m[y][x]) a[py+y][px+x]=t; } }
+  function holes(a){ let h=0; for(let x=0;x<W;x++){ let seen=false; for(let y=0;y<H;y++){ if(a[y][x]) seen=true; else if(seen) h++; } } return h;}
+  function height(a){ for(let y=0;y<H;y++){ for(let x=0;x<W;x++) if(a[y][x]) return H-y; } return 0; }
+  function step(){
+    ensure(); const t=q.shift(); const m0=clone(SHAPES[t]);
+    let bestScore=-1e9, best=null, m=m0;
+    for(let r=0;r<4;r++){ if(r>0) m=rotM(m,1); const w=m[0].length;
+      for(let x=0;x<=W-w;x++){ const y=dropY(A,m,x); if(!can(A,m,x,y)) continue;
+        const sim=cloneArena(A); place(sim,m,x,y,t);
+        let lines=0; outer: for(let yy=H-1;yy>=0;yy--){ for(let xx=0;xx<W;xx++) if(!sim[yy][xx]) continue outer; sim.splice(yy,1); sim.unshift(new Array(W).fill(0)); yy++; lines++; }
+        const sc = lines*12 - holes(sim)*5 - height(sim)*1.2;
+        if(sc>bestScore){ bestScore=sc; best={r,x,y,lines}; }
+      }
+    }
+    if(!best){ roundKO('me'); for(let i=0;i<H;i++) A[i].fill(0); return; }
+    m=m0; for(let i=0;i<best.r;i++) m=rotM(m,1);
+    place(A,m,best.x,best.y,t);
+    let lines=0; outer: for(let yy=H-1;yy>=0;yy--){ for(let xx=0;xx<W;xx++) if(!A[yy][xx]) continue outer; A.splice(yy,1); A.unshift(new Array(W).fill(0)); yy++; lines++; }
+    const send = lines===2?1:lines===3?2:lines>=4?4:0;
+    if(send>0) receive(send);
+  }
+  function receive(n){ addGarbage(A,n); }
+  return {step,receive};
+}
+
+/*** KO ***/
+function roundKO(who){
+  if(who==='me'){ koMe++; } else { koAI++; }
+  koText.textContent = `KO ${koMe} / 5`;
+  if(koMe>=5){ gameOver=true; statusText.textContent="你 勝利！"; sfx('sfxGameover'); return; }
+  if(koAI>=5){ gameOver=true; statusText.textContent="AI 勝利"; sfx('sfxGameover'); return; }
+  // reset
+  arena=mat(W,H); hold=null; canHold=true; queue=[]; bag=[]; ensureQueue(); spawn();
+}
+
+/*** Game loop ***/
+let aiTimer=0;
+function start(modeIn){
+  mode=modeIn; arena=mat(W,H); hold=null; canHold=true; queue=[]; bag=[]; ensureQueue(); spawn(); gameOver=false; koMe=0; koAI=0; combo=-1; lastRotate=false;
+  dropInterval=800; timeMs=0; lastTime=0; acc=0; startTs=performance.now(); aiTimer=0;
+  statusText.textContent="Go!"; koText.textContent="KO 0 / 5"; safePlay(bgm);
+  requestAnimationFrame(loop);
+}
+function loop(t){
+  if(gameOver) return;
+  const dt = lastTime? (t-lastTime):0; lastTime=t; acc += dt; timeMs = t-startTs; aiTimer += dt;
+  if(acc>=dropInterval){ softDrop(); acc%=dropInterval; }
+  if(mode==='single'){ const s=(timeMs/1000|0); dropInterval = Math.max(200, 800 - ((s/10)|0)*50); }
+  if(mode==='vs_ai' && aiTimer>=850){ ai.step(); aiTimer%=850; }
+  const ts = (timeMs/1000|0); if(timerEl._v!==ts){ timerEl._v=ts; timerEl.textContent=ts+"s"; }
+  ctx.clearRect(0,0,canvas.width,canvas.height); draw();
+  requestAnimationFrame(loop);
+}
+
+/*** 控制與事件 ***/
+document.getElementById('startBtn').addEventListener('click',()=>{ 
+  if(document.getElementById('modeSelect').value==='vs_ai' && !ai) ai=makeAI();
+  start(document.getElementById('modeSelect').value); safePlay(bgm); 
+}, {passive:true});
+document.getElementById('restartBtn').addEventListener('click',()=>location.reload(), {passive:true});
+addEventListener('keydown',e=>{
+  if(gameOver||!piece) return;
+  if(e.key==='ArrowLeft') move(-1);
+  else if(e.key==='ArrowRight') move(1);
+  else if(e.key==='ArrowDown') softDrop();
+  else if(e.key===' '){ hardDrop(); }
+  else if(e.key==='ArrowUp' || e.key.toLowerCase()==='x'){ rotate(1); }
+  else if(e.key.toLowerCase()==='z'){ rotate(-1); }
+  else if(e.key.toLowerCase()==='c' || e.key==='Shift'){ holdAction(); }
+}, {passive:true});
+document.getElementById('btnLeft').addEventListener('click',()=>move(-1), {passive:true});
+document.getElementById('btnRight').addEventListener('click',()=>move(1), {passive:true});
+document.getElementById('btnDown').addEventListener('click',softDrop, {passive:true});
+document.getElementById('btnHard').addEventListener('click',hardDrop, {passive:true});
+document.getElementById('btnRotate').addEventListener('click',()=>rotate(1), {passive:true});
+document.getElementById('btnHold').addEventListener('click',holdAction, {passive:true});
+
+function holdAction(){ if(!canHold) return; const cur=piece.type; if(hold){ const t=hold; hold=cur; piece={type:t, mat:clone(SHAPES[t])}; pos={x:3,y:0}; } else { hold=cur; spawn(); } canHold=false; drawMini(holdMini, hold); }
+</script>
+</body>
+</html>
