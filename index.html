@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
+<title>ULTRA TETRIS – Neo</title>
+<link rel="manifest" href="manifest.json"/>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+:root{--neon:#00e6df}
+*{box-sizing:border-box;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
+html,body{height:100%;margin:0;background:#02030a;color:#e7fbff;font-family:"Noto Sans TC",system-ui,-apple-system,sans-serif}
+.bg{position:fixed;inset:0;pointer-events:none;background:
+ radial-gradient(1000px 1000px at 15% 10%, rgba(0,255,255,.12), transparent 60%),
+ radial-gradient(900px 900px at 85% 85%, rgba(255,0,255,.10), transparent 60%)}
+.container{position:relative;display:flex;flex-direction:column;align-items:center;height:100vh;opacity:0;transition:opacity .6s ease;padding-top:8vh}
+.header{display:flex;justify-content:center;gap:8px;width:100%;padding:6px 0 0}
+.btn,select.btn{background:#000;border:1px solid var(--neon);color:var(--neon);padding:8px 12px;border-radius:10px;font-weight:800;cursor:pointer;font-size:14px}
+.main{flex:1;display:flex;flex-direction:column;align-items:center}
+.boardWrap{position:relative;display:flex;align-items:flex-start}
+.board{width:min(65vw,480px);aspect-ratio:1/2;background:transparent;border:2px solid var(--neon);border-radius:6px;position:relative;margin-right:min(6vw,40px)}
+.canvas{width:100%;height:100%;image-rendering:pixelated}
+.side{display:flex;flex-direction:column;gap:10px;position:absolute;left:calc(100% + 12px);top:0}
+.panel{width:20vw;max-width:110px;height:20vw;max-height:110px;background:#071018;border:1px solid rgba(0,255,255,.25);border-radius:10px;color:#c8f8ff;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px}
+.panel h4{margin:6px 0 4px 0;letter-spacing:1px}
+.mini{width:80%;height:80%;background:#0b0b12;border:1px solid rgba(0,255,255,.2)}
+.controls-virtual{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:min(85vw,580px);margin:12px 0 14px}
+.vbtn{padding:24px;font-size:20px;border-radius:16px;background:#0a0f16;border:1px solid rgba(0,255,255,.25);color:var(--neon);font-weight:800}
+.vbtn:active{transform:scale(.96);box-shadow:0 0 10px #0ff}
+.badge{position:absolute;top:-28px;left:0;color:#9ff;text-shadow:0 0 6px #0ff}
+.koHud{position:absolute;top:-28px;right:0;font-weight:900;color:#ff8aa8;text-shadow:0 0 6px #f0a}
+#startup{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#02030a;z-index:20;transition:opacity .6s ease}
+#startup.fade{opacity:0;pointer-events:none}
+#startup .card{position:relative;width:min(70vw,520px);height:min(60vh,680px);background:rgba(0,0,0,.4);border:1px solid rgba(0,255,255,.25);border-radius:16px;box-shadow:0 0 30px rgba(0,255,255,.15) inset}
+#startup .frame{position:absolute;inset:8% 12%;border:1.5px solid #00e6ff;border-radius:10px}
+#startup .scan{position:absolute;left:12%;right:12%;height:2px;background:#00e6ff;opacity:.7;animation:scan 1.4s linear infinite}
+@keyframes scan{0%{top:12%}100%{top:88%}}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+<!-- 防止 iPhone 縮放 -->
+<script>
+document.addEventListener('gesturestart', e=>e.preventDefault(), {passive:false});
+document.addEventListener('dblclick', e=>e.preventDefault(), {passive:false});
+</script>
+<!-- 開場動畫 -->
+<div id="startup">
+  <div class="card">
+    <div class="frame"></div>
+    <div class="scan"></div>
+    <div style="position:absolute;left:0;right:0;bottom:8%;text-align:center;color:#9fe;font-weight:800;letter-spacing:1.5px">SYSTEM INITIALIZING...</div>
+  </div>
+</div>
+<div class="container">
+  <div class="header">
+    <select id="modeSelect" class="btn">
+      <option value="single">單機挑戰</option>
+      <option value="vs_ai">AI 對戰 (計時+KO)</option>
+    </select>
+    <select id="aiLevel" class="btn"><option value="easy">簡單</option><option value="normal" selected>普通</option><option value="hard">困難</option></select>
+    <button id="startBtn" class="btn">開始</button>
+    <button id="restartBtn" class="btn">重新開始</button>
+    <button id="muteBtn" class="btn">🔊 音效</button>
+    <button id="installBtn" class="btn" style="display:none;">📲 安裝 App</button>
+  </div>
+  <div class="main">
+    <div class="boardWrap">
+      <div class="board">
+        <div class="badge" id="statusText">Ready</div>
+        <div class="koHud" id="koText">KO 0 / 5</div>
+        <canvas id="board" class="canvas" width="300" height="600"></canvas>
+        <div class="side">
+          <div class="panel"><h4>HOLD</h4><canvas id="holdMini" class="mini" width="80" height="80"></canvas></div>
+          <div class="panel"><h4>NEXT</h4><canvas id="nextMini" class="mini" width="80" height="80"></canvas></div>
+          <div class="panel"><h4>計時</h4><div id="timer">0s</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="controls-virtual">
+      <button class="vbtn" id="btnLeft">←</button>
+      <button class="vbtn" id="btnDown">↓</button>
+      <button class="vbtn" id="btnRight">→</button>
+      <button class="vbtn" id="btnRotate">旋轉</button>
+      <button class="vbtn" id="btnHold">HOLD</button>
+      <button class="vbtn" id="btnHard">快降</button>
+    </div>
+  </div>
+</div>
+
+<audio id="bgm" src="bgm.mp3" loop></audio>
+
+<script>
+/*** Service Worker（相對路徑） ***/
+if('serviceWorker' in navigator){
+  addEventListener('load',()=>{
+    const path=(location.pathname.endsWith('/')?location.pathname:location.pathname.replace(/\/[^/]*$/,'/'))+'sw.js';
+    navigator.serviceWorker.register(path);
+  });
+}
+/*** PWA 安裝 ***/
+let deferredPrompt=null; const installBtn=document.getElementById("installBtn"); installBtn.style.display="none";
+addEventListener("beforeinstallprompt",e=>{e.preventDefault(); deferredPrompt=e; installBtn.style.display="inline-block";});
+installBtn.addEventListener("click",()=>{ if(deferredPrompt){ deferredPrompt.prompt(); deferredPrompt.userChoice.finally(()=>{deferredPrompt=null; installBtn.style.display="none";});}});
+
+/*** 開場淡出 + 啟動音 + BGM 淡入 ***/
+let AC=null, masterGain=null, muted=false;
+function ensureAC(){ if(!AC){ AC = new (window.AudioContext||window.webkitAudioContext)(); masterGain = AC.createGain(); masterGain.gain.value = 0.25; masterGain.connect(AC.destination);} }
+function playStartupSound(){ if(muted) return; ensureAC(); const o=AC.createOscillator(), g=AC.createGain(); o.type='sine'; o.frequency.setValueAtTime(200,AC.currentTime); o.frequency.linearRampToValueAtTime(800,AC.currentTime+1.0); g.gain.setValueAtTime(0.0001,AC.currentTime); g.gain.exponentialRampToValueAtTime(0.3,AC.currentTime+0.05); g.gain.exponentialRampToValueAtTime(0.0001,AC.currentTime+1.0); o.connect(g); g.connect(masterGain); o.start(); o.stop(AC.currentTime+1.05); }
+function playBgm(){ if(muted) return; const a=document.getElementById('bgm'); a.volume=0; a.play().catch(()=>{}); let v=0; const fade=setInterval(()=>{ v+=0.02; if(v>=0.4){ v=0.4; clearInterval(fade);} a.volume=v; },100); }
+function stopBgm(){ const a=document.getElementById('bgm'); a.pause(); a.currentTime=0; }
+
+window.addEventListener('load', ()=>{
+  playStartupSound();
+  setTimeout(()=>{ document.getElementById('startup').classList.add('fade'); document.querySelector('.container').style.opacity=1; playBgm(); }, 1500);
+});
+
+document.getElementById("muteBtn").addEventListener("click",()=>{ muted=!muted; document.getElementById("muteBtn").textContent= muted? "🔇 靜音":"🔊 音效"; if(muted) stopBgm(); });
+document.body.addEventListener("touchstart",()=>{ ensureAC(); },{once:true,passive:true});
+
+/*** 遊戲資料 ***/
+const W=10,H=20,BS=30;
+const canvas=document.getElementById('board'), ctx=canvas.getContext('2d',{alpha:false,desynchronized:true}); ctx.imageSmoothingEnabled=false;
+const holdMini=document.getElementById('holdMini').getContext('2d');
+const nextMini=document.getElementById('nextMini').getContext('2d');
+const statusText=document.getElementById('statusText');
+const koText=document.getElementById('koText');
+const timerEl=document.getElementById('timer');
+
+const COLORS={I:["#00e6ff","#00aaff"],O:["#ffd700","#ff9900"],T:["#ff00ff","#b000ff"],L:["#ff8800","#ff4400"],J:["#3385ff","#0033cc"],S:["#00ff88","#00ffaa"],Z:["#ff3355","#ff6699"]};
+const sprite={};
+function makeBlockSprite(type){ const off=document.createElement('canvas'); off.width=BS; off.height=BS; const c=off.getContext('2d'); const g=c.createLinearGradient(0,0,BS,BS); const col=COLORS[type]||["#fff","#888"]; g.addColorStop(0,col[0]); g.addColorStop(1,col[1]); c.fillStyle=g; c.fillRect(0,0,BS,BS); c.strokeStyle="rgba(0,255,255,0.9)"; c.lineWidth=1.2; c.strokeRect(0.5,0.5,BS-1,BS-1); return off; }
+for(const t of Object.keys(COLORS)) sprite[t]=makeBlockSprite(t);
+
+const gridCanvas = (()=>{ const off=document.createElement('canvas'); off.width=canvas.width; off.height=canvas.height; const g=off.getContext('2d'); g.fillStyle="#000"; g.fillRect(0,0,off.width,off.height); g.strokeStyle="rgba(0,255,255,0.08)"; g.lineWidth=1; for(let x=0;x<=W;x++){ g.beginPath(); g.moveTo(x*BS,0); g.lineTo(x*BS,H*BS); g.stroke(); } for(let y=0;y<=H;y++){ g.beginPath(); g.moveTo(0,y*BS); g.lineTo(W*BS,y*BS); g.stroke(); } return off; })();
+
+const SHAPES={ I:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], O:[[1,1],[1,1]], T:[[0,1,0],[1,1,1],[0,0,0]], L:[[0,0,1],[1,1,1],[0,0,0]], J:[[1,0,0],[1,1,1],[0,0,0]], S:[[0,1,1],[1,1,0],[0,0,0]], Z:[[1,1,0],[0,1,1],[0,0,0]] };
+
+let mode='single', arena, piece, pos, queue=[], bag=[], hold=null, canHold=true, gameOver=false;
+let dropInterval=800, timeMs=0, lastTime=0, acc=0, startTs=0, aiTimer=0, vsTimeLeft=60;
+let koMe=0, koAI=0, combo=-1, lastRotate=false, playerLines=0, aiLines=0;
+let ai=null; let aiLevel='normal', aiStepMs=900;
+
+/*** 工具 ***/
+const mat=(w,h)=>{const m=[];while(h--)m.push(new Array(w).fill(0));return m}
+const clone=m=>m.map(r=>r.slice());
+function rotM(m,dir){const N=m.length,res=mat(N,N);for(let y=0;y<N;y++)for(let x=0;x<N;x++){res[dir>0?x:N-1-x][dir>0?N-1-y:y]=m[y][x];}return res}
+function collide(A,M,off){for(let y=0;y<M.length;y++)for(let x=0;x<M[y].length;x++){ if(M[y][x] && ((A[y+off.y]&&A[y+off.y][x+off.x])!==0)) return true; } return false}
+function merge(A,M,off,type){for(let y=0;y<M.length;y++)for(let x=0;x<M[y].length;x++){ if(M[y][x]) A[y+off.y][x+off.x]=type; }}
+function clearLines(A){let n=0;outer:for(let y=H-1;y>=0;y--){for(let x=0;x<W;x++) if(!A[y][x]) continue outer; A.splice(y,1); A.unshift(new Array(W).fill(0)); y++; n++;} return n}
+
+/*** 7-bag ***/
+function refillBag(){bag = Object.keys(SHAPES).sort(()=>Math.random()-0.5);}
+function nextType(){if(bag.length===0) refillBag(); return bag.pop();}
+function ensureQueue(){while(queue.length<5) queue.push(nextType());}
+function drawMini(ctx2d,t){ ctx2d.clearRect(0,0,80,80); const m=SHAPES[t]; if(!m) return; const cell=18, ox=10, oy=10; for(let y=0;y<m.length;y++)for(let x=0;x<m[y].length;x++){ if(m[y][x]) ctx2d.drawImage(sprite[t]||sprite['I'], ox+x*cell, oy+y*cell, cell-2, cell-2); } }
+
+/*** 生成新方塊 ***/
+function spawn(){ const t=(queue.length?queue.shift():nextType()); piece={type:t, mat:clone(SHAPES[t])}; pos={x:3,y:0}; canHold=true; ensureQueue(); drawMini(nextMini, queue[0]); if(collide(arena,piece.mat,pos)){ roundKO('ai'); }}
+
+/*** 繪製 ***/
+function drawArena(){
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const v=arena[y][x];
+    if(!v) continue;
+    if(v==='G'){ // 垃圾線
+      ctx.fillStyle='#222'; ctx.fillRect(x*BS,y*BS,BS,BS);
+      ctx.strokeStyle='rgba(255,80,80,.45)'; ctx.beginPath(); ctx.moveTo(x*BS,y*BS+BS-2); ctx.lineTo(x*BS+BS,y*BS+BS-2); ctx.stroke();
+      ctx.strokeStyle='rgba(0,255,255,.25)'; ctx.strokeRect(x*BS+.5,y*BS+.5,BS-1,BS-1);
+    }else{
+      ctx.drawImage(sprite[v]||sprite['I'], x*BS, y*BS);
+    }
+  }
+}
+function ghostY(){ let gy=pos.y; while(!collide(arena,piece.mat,{x:pos.x,y:gy+1})) gy++; return gy; }
+function draw(){ ctx.drawImage(gridCanvas,0,0); drawArena(); const gy=ghostY(); for(let y=0;y<piece.mat.length;y++)for(let x=0;x<piece.mat[y].length;x++){ if(piece.mat[y][x]){ ctx.globalAlpha=.28; ctx.drawImage(sprite[piece.type], (x+pos.x)*BS, (y+gy)*BS); ctx.globalAlpha=1; } } for(let y=0;y<piece.mat.length;y++)for(let x=0;x<piece.mat[y].length;x++){ if(piece.mat[y][x]) ctx.drawImage(sprite[piece.type], (x+pos.x)*BS, (y+pos.y)*BS); } }
+
+/*** 操作 ***/
+function move(dx){ if(!collide(arena,piece.mat,{x:pos.x+dx,y:pos.y})) pos.x+=dx; }
+function softDrop(){ pos.y++; if(collide(arena,piece.mat,pos)){ pos.y--; lock(); } lastRotate=false; }
+function hardDrop(){ while(!collide(arena,piece.mat,{x:pos.x,y:pos.y+1})) pos.y++; lock(); }
+function rotate(dir){ const m=rotM(piece.mat,dir); const kicks=[0,1,-1,2,-2]; for(const k of kicks){ if(!collide(arena,m,{x:pos.x+k,y:pos.y})){ piece.mat=m; pos.x+=k; return; } } }
+
+/*** 判定 / 攻擊 ***/
+function isTspin(){ if(piece.type!=='T'||!lastRotate) return false; const cx=pos.x+1, cy=pos.y+1; const cs=[[cx-1,cy-1],[cx+1,cy-1],[cx-1,cy+1],[cx+1,cy+1]]; let f=0; for(const [x,y] of cs){ if(y<0||y>=H||x<0||x>=W || arena[y][x]) f++; } return f>=3; }
+function attackBy(lines,tspin){ let send=0; if(tspin){ send = lines===1?2: lines===2?4:6; } else{ if(lines===2) send=1; else if(lines===3) send=2; else if(lines>=4) send=4; } if(lines>0){ combo++; if(combo>=1) send += Math.min(4, combo); } else combo=-1; return send; }
+function addGarbage(A,n){ for(let i=0;i<n;i++){ A.shift(); const row=new Array(W).fill('G'); row[Math.floor(Math.random()*W)]=0; A.push(row);} }
+
+function lock(){
+  merge(arena,piece.mat,pos,piece.type);
+  const tsp=isTspin();
+  const lines=clearLines(arena);
+  if(lines>0){ playerLines += lines; if(mode==='single'){ let lvl=1; if(playerLines>=50) lvl=5; else if(playerLines>=35) lvl=4; else if(playerLines>=20) lvl=3; else if(playerLines>=10) lvl=2; const map={1:1000,2:700,3:500,4:350,5:200}; dropInterval=map[lvl]; statusText.textContent="Lv."+lvl+"  消行:"+playerLines; } }
+  if(mode==='vs_ai'){ const send=attackBy(lines,tsp); if(send>0) ai.receive(send); }
+  spawn();
+}
+
+/*** AI（隱藏） ***/
+function makeAI(){
+  const A=mat(W,H); let q=[], b=[];
+  function ref(){ b=Object.keys(SHAPES).sort(()=>Math.random()-0.5); }
+  function nt(){ if(b.length===0) ref(); return b.pop(); }
+  function ensure(){ while(q.length<5) q.push(nt()); }
+  function can(a,m,px,py){ for(let y=0;y<m.length;y++)for(let x=0;x<m[y].length;x++){ if(m[y][x] && ((a[py+y]&&a[py+y][px+x])!==0)) return false; } return true; }
+  function dropY(a,m,px){ let py=0; while(can(a,m,px,py+1)) py++; return py; }
+  function best(a,m){ // 簡化評分：高度與洞
+    let bestX=3,bestRot=m, bestScore=1e9;
+    for(const r of [m,rotM(m,1),rotM(m,1),rotM(m,1)]){
+      for(let x=-2;x<W;x++){
+        if(!can(a,r,x,0)) continue;
+        const y=dropY(a,r,x);
+        let holes=0,height=0;
+        for(let yy=0;yy<H;yy++)for(let xx=0;xx<W;xx++){ if(a[yy][xx]){ height=Math.max(height,H-yy); if(!a[yy+1]||!a[yy+1][xx]){} } }
+        // 模擬放置
+        const tmp=clone(a); for(let yy=0;yy<r.length;yy++)for(let xx=0;xx<r[yy].length;xx++){ if(r[yy][xx]){ if(!tmp[y+yy]) continue; tmp[y+yy][x+xx]=1; } }
+        // 計分（極簡）
+        let score=y*2 + Math.abs(5-(x+1))*3;
+        if(score<bestScore){ bestScore=score; bestX=x; bestRot=r; }
+      }
+    }
+    return {x:bestX, mat:bestRot};
+  }
+  function step(){
+    ensure();
+    // AI 接收攻擊已在外部處理
+  }
+  function receive(n){ addGarbage(arena,n); }
+  return {step,receive};
+}
+
+/*** KO 與對戰結束 ***/
+function endVsMatch(){
+  let msg='';
+  if(koMe>=5 || koAI>=5){ msg = (koMe>=5 ? "你 勝利！(KO 5)" : "AI 勝利 (KO 5)"); }
+  else{
+    const my=playerLines, aiL=aiLines;
+    if(my>aiL) msg="你 勝利！(消行較多)";
+    else if(my<aiL) msg="AI 勝利 (消行較多)";
+    else msg="平手";
+  }
+  statusText.textContent=msg; gameOver=true; stopBgm();
+}
+function roundKO(who){ if(who==='me'){ koMe++; } else { koAI++; } koText.textContent=`KO ${koMe} / 5`; if(koMe>=5 || koAI>=5){ endVsMatch(); return; } arena=mat(W,H); hold=null; canHold=true; queue=[]; bag=[]; ensureQueue(); spawn(); }
+
+/*** 遊戲迴圈 ***/
+function start(modeIn){
+  const lvSel=document.getElementById('aiLevel'); if(lvSel) aiLevel=lvSel.value; aiStepMs=(aiLevel==='easy'?1500:(aiLevel==='hard'?500:900));
+  mode=modeIn; arena=mat(W,H); hold=null; canHold=true; queue=[]; bag=[]; ensureQueue(); spawn();
+  gameOver=false; koMe=0; koAI=0; combo=-1; lastRotate=false; playerLines=0; aiLines=0;
+  dropInterval= mode==='single'?1000:800; timeMs=0; lastTime=0; acc=0; startTs=performance.now(); aiTimer=0; vsTimeLeft=60;
+  statusText.textContent=(mode==='single'?'Lv.1  消行:0':'Go!'); koText.textContent="KO 0 / 5";
+  if(mode==='vs_ai' && !ai) ai=makeAI();
+  requestAnimationFrame(loop);
+}
+function loop(t){
+  if(gameOver) return;
+  const dt= lastTime? (t-lastTime):0; lastTime=t; acc+=dt; timeMs=t-startTs; aiTimer+=dt;
+  if(acc>=dropInterval){ softDrop(); acc%=dropInterval; }
+  if(mode==='vs_ai'){ const remain=Math.max(0,60 - (timeMs/1000|0)); if(remain!==vsTimeLeft){ vsTimeLeft=remain; timerEl.textContent=remain+"s"; if(remain<=0){ endVsMatch(); return; } } }
+  ctx.clearRect(0,0,canvas.width,canvas.height); draw(); requestAnimationFrame(loop);
+}
+
+/*** 控制 ***/
+document.getElementById('startBtn').addEventListener('click',()=>{ playBgm(); start(document.getElementById('modeSelect').value); },{passive:true});
+document.getElementById('restartBtn').addEventListener('click',()=>location.reload(),{passive:true});
+document.getElementById('btnLeft').addEventListener('click',()=>move(-1),{passive:true});
+document.getElementById('btnRight').addEventListener('click',()=>move(1),{passive:true});
+document.getElementById('btnDown').addEventListener('click',softDrop,{passive:true});
+document.getElementById('btnHard').addEventListener('click',hardDrop,{passive:true});
+document.getElementById('btnRotate').addEventListener('click',()=>{ lastRotate=true; rotate(1); },{passive:true});
+document.getElementById('btnHold').addEventListener('click',holdAction,{passive:true});
+
+addEventListener('keydown',e=>{ if(gameOver||!piece) return;
+  if(e.key==='ArrowLeft') move(-1);
+  else if(e.key==='ArrowRight') move(1);
+  else if(e.key==='ArrowDown') softDrop();
+  else if(e.key===' ') hardDrop();
+  else if(e.key==='ArrowUp'||e.key.toLowerCase()==='x'){ lastRotate=true; rotate(1); }
+  else if(e.key.toLowerCase()==='z'){ lastRotate=true; rotate(-1); }
+  else if(e.key.toLowerCase()==='c'||e.key==='Shift'){ holdAction(); }
+},{passive:true});
+
+function holdAction(){ if(!canHold) return; const cur=piece.type; if(hold){ const t=hold; hold=cur; piece={type:t, mat:clone(SHAPES[t])}; pos={x:3,y:0}; } else { hold=cur; spawn(); } canHold=false; drawMini(holdMini, hold); }
+</script>
+</body>
+</html>
